@@ -136,13 +136,15 @@ export default function ReportDetail() {
                 </div>
                 <div>
                   <div className="text-sm font-medium text-muted-foreground">Coordinates</div>
-                  <div className="font-mono text-sm">{report.latitude.toFixed(6)}, {report.longitude.toFixed(6)}</div>
+                  <div className="font-mono text-sm">{report.latitude != null ? report.latitude.toFixed(6) : "N/A"}, {report.longitude != null ? report.longitude.toFixed(6) : "N/A"}</div>
                 </div>
               </div>
               
               <div className="w-full h-48 bg-muted rounded-md border border-border flex items-center justify-center text-muted-foreground mt-4 text-sm">
                 Map View Placeholder
-                &nbsp;({report.latitude.toFixed(4)}, {report.longitude.toFixed(4)})
+                {report.latitude != null && report.longitude != null && (
+                  <>&nbsp;({report.latitude.toFixed(4)}, {report.longitude.toFixed(4)})</>
+                )}
               </div>
             </CardContent>
           </Card>

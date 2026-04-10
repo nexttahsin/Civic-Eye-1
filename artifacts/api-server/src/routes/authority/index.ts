@@ -249,11 +249,14 @@ router.get(
       pageSize: pageSizeStr,
     } = req.query as Record<string, string | undefined>;
 
-    const page = parseInt(pageStr ?? "0", 10);
-    const pageSize = parseInt(pageSizeStr ?? "20", 10);
+    const pageNum = Math.max(0, parseInt(pageStr ?? "1", 10) - 1); // frontend is 1-indexed
+    const pageSize = Math.min(100, Math.max(1, parseInt(pageSizeStr ?? "20", 10)));
     const urgencyMinNum = urgencyMin ? parseFloat(urgencyMin) : 1;
+
+    const sortAscending = sortBy?.endsWith("_asc") ?? false;
     const sortField =
-      sortBy === "created_at" ? "created_at" : "urgency_score";
+      sortBy?.startsWith("date") ? "created_at" :
+      sortBy?.startsWith("urgency") ? "urgency_score" : "created_at";
 
     let query = supabase
       .from("reports")
@@ -262,8 +265,8 @@ router.get(
         { count: "exact" },
       )
       .eq("department_id", deptId)
-      .order(sortField, { ascending: false })
-      .range(page * pageSize, (page + 1) * pageSize - 1);
+      .order(sortField, { ascending: sortAscending })
+      .range(pageNum * pageSize, (pageNum + 1) * pageSize - 1);
 
     if (status && status !== "all") {
       query = query.eq("status", status);
@@ -308,7 +311,7 @@ router.get(
     res.json({
       reports,
       total: count ?? 0,
-      page,
+      page: pageNum + 1, // return 1-indexed to match frontend
       pageSize,
     });
   },
