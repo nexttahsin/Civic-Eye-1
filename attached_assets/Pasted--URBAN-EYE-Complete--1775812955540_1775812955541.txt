@@ -1,0 +1,296 @@
+-- ============================================================
+-- URBAN EYE (আরবান আই) — Complete Supabase Database Schema
+-- ============================================================
+-- Run this entire file in: Supabase Dashboard → SQL Editor → New Query
+-- Execute the full block at once.
+-- ============================================================
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ============================================================
+-- 1. DEPARTMENTS
+-- ============================================================
+CREATE TABLE departments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  slug TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  name_bn TEXT NOT NULL,
+  jurisdiction_area TEXT NOT NULL,
+  issue_categories TEXT[] NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+INSERT INTO departments (slug, name, name_bn, jurisdiction_area, issue_categories) VALUES
+('dncc','Dhaka North City Corporation','ঢাকা উত্তর সিটি কর্পোরেশন','north',ARRAY['road_damage','pothole','drain','garbage','park','mosquito','streetlight']),
+('dscc','Dhaka South City Corporation','ঢাকা দক্ষিণ সিটি কর্পোরেশন','south',ARRAY['road_damage','pothole','drain','garbage','market','streetlight']),
+('wasa','Dhaka WASA','ঢাকা ওয়াসা','all',ARRAY['water_supply','sewage','waterlogging','pipe_burst']),
+('desco','DESCO','ডেসকো','north',ARRAY['electricity','power_outage','transformer','streetlight_electric']),
+('dpdc','DPDC','ডিপিডিসি','south',ARRAY['electricity','power_outage','transformer','meter_issue']),
+('rajuk','RAJUK','রাজউক','all',ARRAY['illegal_construction','building_violation','unauthorized_structure']),
+('dmp','Dhaka Metropolitan Police','ঢাকা মেট্রোপলিটন পুলিশ','all',ARRAY['road_obstruction','traffic','law_enforcement','signal_failure']);
+
+-- ============================================================
+-- 2. USERS (citizens)
+-- ============================================================
+CREATE TABLE users (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name TEXT NOT NULL,
+  phone TEXT UNIQUE NOT NULL,
+  reputation_score INTEGER DEFAULT 0,
+  is_flagged BOOLEAN DEFAULT FALSE,
+  is_suspended BOOLEAN DEFAULT FALSE,
+  total_reports INTEGER DEFAULT 0,
+  verified_reports INTEGER DEFAULT 0,
+  rejected_reports INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- 3. REPORTS
+-- ============================================================
+CREATE TABLE reports (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  report_number TEXT UNIQUE NOT NULL,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  department_id UUID REFERENCES departments(id),
+  category TEXT NOT NULL,
+  description TEXT NOT NULL,
+  latitude DOUBLE PRECISION NOT NULL,
+  longitude DOUBLE PRECISION NOT NULL,
+  address TEXT,
+  ward_name TEXT,
+  area_zone TEXT CHECK (area_zone IN ('north','south','unknown')),
+  status TEXT NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted','under_review','in_progress','resolved','rejected')),
+  urgency_score NUMERIC(3,1) DEFAULT 0,
+  upvote_count INTEGER DEFAULT 0,
+  confirmation_count INTEGER DEFAULT 0,
+  ai_verified BOOLEAN DEFAULT FALSE,
+  ai_confidence NUMERIC(4,1) DEFAULT 0,
+  is_flagged_fake BOOLEAN DEFAULT FALSE,
+  image_count INTEGER DEFAULT 0,
+  n8n_sent BOOLEAN DEFAULT FALSE,
+  n8n_sent_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- 4. REPORT IMAGES
+-- ============================================================
+CREATE TABLE report_images (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  report_id UUID NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
+  storage_path TEXT NOT NULL,
+  public_url TEXT NOT NULL,
+  file_size_bytes BIGINT,
+  mime_type TEXT,
+  upload_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- 5. IMAGE METADATA (EXIF)
+-- ============================================================
+CREATE TABLE image_metadata (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  image_id UUID NOT NULL REFERENCES report_images(id) ON DELETE CASCADE,
+  exif_capture_time TIMESTAMPTZ,
+  exif_gps_lat DOUBLE PRECISION,
+  exif_gps_lng DOUBLE PRECISION,
+  exif_device_make TEXT,
+  exif_device_model TEXT,
+  has_exif_data BOOLEAN DEFAULT FALSE,
+  gps_matches_submission BOOLEAN,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- 6. AI ANALYSIS
+-- ============================================================
+CREATE TABLE ai_analysis (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  report_id UUID NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
+  image_id UUID REFERENCES report_images(id),
+  detected_issue TEXT,
+  severity TEXT CHECK (severity IN ('minor','moderate','severe','critical')),
+  confidence NUMERIC(4,1),
+  is_real_photo BOOLEAN,
+  description_en TEXT,
+  description_bn TEXT,
+  raw_gemini_response JSONB,
+  is_aggregate BOOLEAN DEFAULT FALSE,
+  final_category TEXT,
+  final_severity TEXT,
+  final_confidence NUMERIC(4,1),
+  final_urgency_score NUMERIC(3,1),
+  aggregate_summary_en TEXT,
+  aggregate_summary_bn TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- 7. ACTIVITY LOGS
+-- ============================================================
+CREATE TABLE activity_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  report_id UUID REFERENCES reports(id),
+  actor_type TEXT CHECK (actor_type IN ('citizen','authority','system','n8n')),
+  actor_id UUID,
+  action TEXT NOT NULL,
+  details JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- 8. UPVOTES
+-- ============================================================
+CREATE TABLE report_upvotes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  report_id UUID NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(report_id, user_id)
+);
+
+-- ============================================================
+-- 9. INDEXES
+-- ============================================================
+CREATE INDEX idx_reports_user_id ON reports(user_id);
+CREATE INDEX idx_reports_department_id ON reports(department_id);
+CREATE INDEX idx_reports_status ON reports(status);
+CREATE INDEX idx_reports_created_at ON reports(created_at DESC);
+CREATE INDEX idx_report_images_report_id ON report_images(report_id);
+CREATE INDEX idx_ai_analysis_report_id ON ai_analysis(report_id);
+
+-- ============================================================
+-- 10. FUNCTIONS & TRIGGERS
+-- ============================================================
+
+-- Auto-generate report number (NS-YYYY-000001)
+CREATE OR REPLACE FUNCTION generate_report_number()
+RETURNS TRIGGER AS $$
+DECLARE seq_num INTEGER;
+BEGIN
+  SELECT COUNT(*) + 1 INTO seq_num FROM reports;
+  NEW.report_number := 'NS-' || TO_CHAR(NOW(), 'YYYY') || '-' || LPAD(seq_num::TEXT, 6, '0');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_report_number
+  BEFORE INSERT ON reports
+  FOR EACH ROW
+  EXECUTE FUNCTION generate_report_number();
+
+-- Auto-update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER reports_updated_at
+  BEFORE UPDATE ON reports
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at();
+
+CREATE TRIGGER users_updated_at
+  BEFORE UPDATE ON users
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at();
+
+-- ============================================================
+-- 11. ROW LEVEL SECURITY (RLS)
+-- ============================================================
+
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE report_images ENABLE ROW LEVEL SECURITY;
+ALTER TABLE image_metadata ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ai_analysis ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activity_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE report_upvotes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE departments ENABLE ROW LEVEL SECURITY;
+
+-- Departments: public read
+CREATE POLICY "departments_public_read"
+  ON departments FOR SELECT
+  USING (true);
+
+-- Users: own records only
+CREATE POLICY "users_select_own"
+  ON users FOR SELECT
+  USING (auth.uid() = id);
+
+CREATE POLICY "users_insert_own"
+  ON users FOR INSERT
+  WITH CHECK (auth.uid() = id);
+
+CREATE POLICY "users_update_own"
+  ON users FOR UPDATE
+  USING (auth.uid() = id);
+
+-- Reports: own + public feed
+CREATE POLICY "reports_citizen_own"
+  ON reports FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "reports_public_feed"
+  ON reports FOR SELECT
+  USING (
+    status IN ('submitted','in_progress','resolved')
+    AND ai_verified = true
+    AND is_flagged_fake = false
+  );
+
+CREATE POLICY "reports_insert_own"
+  ON reports FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- Report Images: own records
+CREATE POLICY "images_citizen_own"
+  ON report_images FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM reports
+      WHERE reports.id = report_images.report_id
+        AND reports.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "images_insert_own"
+  ON report_images FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM reports
+      WHERE reports.id = report_images.report_id
+        AND reports.user_id = auth.uid()
+    )
+  );
+
+-- AI Analysis: read own
+CREATE POLICY "ai_analysis_read"
+  ON ai_analysis FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM reports
+      WHERE reports.id = ai_analysis.report_id
+        AND reports.user_id = auth.uid()
+    )
+  );
+
+-- Upvotes: any logged-in user can read, insert own
+CREATE POLICY "upvotes_read"
+  ON report_upvotes FOR SELECT
+  USING (auth.uid() IS NOT NULL);
+
+CREATE POLICY "upvotes_insert"
+  ON report_upvotes FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- ============================================================
+-- DONE! All tables, indexes, triggers, and RLS policies created.
+-- ============================================================

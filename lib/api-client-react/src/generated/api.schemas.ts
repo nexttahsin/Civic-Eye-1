@@ -8,3 +8,258 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface ErrorResponse {
+  error: string;
+}
+
+export interface Department {
+  id: string;
+  slug: string;
+  name: string;
+  name_bn: string;
+  jurisdiction_area: string;
+  issue_categories: string[];
+}
+
+export interface AuthorityUser {
+  id: string;
+  department_id: string;
+  username: string;
+  full_name: string;
+  role: string;
+  is_active: boolean;
+  /** @nullable */
+  auth_user_id?: string | null;
+  created_at: string;
+  departments: Department;
+}
+
+export interface AuthorityUserResponse {
+  authorityUser: AuthorityUser;
+}
+
+export interface ReportImage {
+  id: string;
+  report_id: string;
+  storage_path: string;
+  public_url: string;
+  /** @nullable */
+  file_size_bytes?: number | null;
+  /** @nullable */
+  mime_type?: string | null;
+  upload_order: number;
+  created_at: string;
+}
+
+export interface ReportSummary {
+  id: string;
+  report_number: string;
+  category: string;
+  status: string;
+  urgency_score: number;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  ward_name?: string | null;
+  created_at: string;
+  updated_at: string;
+  ai_verified: boolean;
+  is_flagged_fake: boolean;
+  image_count: number;
+  /** @nullable */
+  thumbnail_url?: string | null;
+}
+
+export interface AiAnalysis {
+  id: string;
+  report_id: string;
+  /** @nullable */
+  detected_issue?: string | null;
+  /** @nullable */
+  severity?: string | null;
+  /** @nullable */
+  confidence?: number | null;
+  /** @nullable */
+  is_real_photo?: boolean | null;
+  /** @nullable */
+  description_en?: string | null;
+  /** @nullable */
+  description_bn?: string | null;
+  is_aggregate: boolean;
+  /** @nullable */
+  final_category?: string | null;
+  /** @nullable */
+  final_severity?: string | null;
+  /** @nullable */
+  final_confidence?: number | null;
+  /** @nullable */
+  final_urgency_score?: number | null;
+  /** @nullable */
+  aggregate_summary_en?: string | null;
+  /** @nullable */
+  aggregate_summary_bn?: string | null;
+  created_at: string;
+}
+
+/**
+ * @nullable
+ */
+export type ActivityLogDetails = { [key: string]: unknown } | null;
+
+export interface ActivityLog {
+  id: string;
+  /** @nullable */
+  report_id?: string | null;
+  /** @nullable */
+  actor_type?: string | null;
+  /** @nullable */
+  actor_id?: string | null;
+  action: string;
+  /** @nullable */
+  details?: ActivityLogDetails;
+  created_at: string;
+}
+
+export interface CitizenInfo {
+  full_name: string;
+  phone_masked: string;
+  reputation_score: number;
+  total_reports: number;
+  verified_reports: number;
+}
+
+/**
+ * @nullable
+ */
+export type ReportDetailDepartments = { [key: string]: unknown } | null;
+
+export interface ReportDetail {
+  id: string;
+  report_number: string;
+  category: string;
+  description: string;
+  status: string;
+  urgency_score: number;
+  latitude: number;
+  longitude: number;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  ward_name?: string | null;
+  /** @nullable */
+  area_zone?: string | null;
+  ai_verified: boolean;
+  ai_confidence: number;
+  is_flagged_fake: boolean;
+  upvote_count: number;
+  confirmation_count: number;
+  image_count: number;
+  created_at: string;
+  updated_at: string;
+  department_id: string;
+  user_id: string;
+  /** @nullable */
+  departments?: ReportDetailDepartments;
+  report_images: ReportImage[];
+  ai_analysis: AiAnalysis[];
+  activity_logs: ActivityLog[];
+  citizen: CitizenInfo;
+}
+
+export interface ReportDetailResponse {
+  report: ReportDetail;
+}
+
+export interface ReportsListResponse {
+  reports: ReportSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface UpdateReportStatusBody {
+  reportId: string;
+  newStatus: string;
+  note: string;
+}
+
+export interface UpdateReportStatusResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface CategoryCount {
+  category: string;
+  count: number;
+  avg_urgency: number;
+}
+
+export interface DailyCount {
+  date: string;
+  count: number;
+}
+
+export interface StatusCount {
+  status: string;
+  count: number;
+}
+
+export interface AnalyticsResponse {
+  categoryBreakdown: CategoryCount[];
+  dailyReports: DailyCount[];
+  statusBreakdown: StatusCount[];
+  responseRate: number;
+  /** @nullable */
+  avgResolutionDays?: number | null;
+  thisMonthCount: number;
+  lastMonthCount: number;
+}
+
+export interface UrgentReport {
+  id: string;
+  report_number: string;
+  category: string;
+  urgency_score: number;
+  /** @nullable */
+  ward_name?: string | null;
+  created_at: string;
+  status: string;
+}
+
+export interface DashboardSummaryResponse {
+  totalReports: number;
+  criticalReports: number;
+  underReview: number;
+  resolvedThisWeek: number;
+  urgentReports: UrgentReport[];
+  recentReports: ReportSummary[];
+  categoryBreakdown: CategoryCount[];
+}
+
+export type GetAuthorityReportsParams = {
+  /**
+   * @nullable
+   */
+  status?: string | null;
+  /**
+   * @nullable
+   */
+  category?: string | null;
+  /**
+   * @nullable
+   */
+  urgencyMin?: number | null;
+  /**
+   * @nullable
+   */
+  sortBy?: string | null;
+  /**
+   * @nullable
+   */
+  page?: number | null;
+  /**
+   * @nullable
+   */
+  pageSize?: number | null;
+};

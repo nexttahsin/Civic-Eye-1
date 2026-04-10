@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: authority
+    description: Authority dashboard operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,179 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /authority/me:
+    get:
+      operationId: getAuthorityMe
+      tags: [authority]
+      summary: Get logged-in authority user info
+      description: Returns the authority user record for the current session
+      responses:
+        "200":
+          description: Authority user info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorityUserResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /authority/update-status:
+    post:
+      operationId: updateReportStatus
+      tags: [authority]
+      summary: Update report status
+      description: Update the status of a report and log the activity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReportStatusBody"
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateReportStatusResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - report does not belong to this department
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /authority/reports:
+    get:
+      operationId: getAuthorityReports
+      tags: [authority]
+      summary: Get reports for the authority's department
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: category
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: urgencyMin
+          in: query
+          schema:
+            type: ["number", "null"]
+        - name: sortBy
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: page
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: pageSize
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Reports list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportsListResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /authority/dashboard:
+    get:
+      operationId: getAuthorityDashboard
+      tags: [authority]
+      summary: Get dashboard summary data
+      description: Returns summary stats and recent reports for the authority's department
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummaryResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /authority/analytics:
+    get:
+      operationId: getAuthorityAnalytics
+      tags: [authority]
+      summary: Get analytics data for the authority's department
+      responses:
+        "200":
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /authority/reports/{id}:
+    get:
+      operationId: getAuthorityReport
+      tags: [authority]
+      summary: Get single report detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Report detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportDetailResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +209,486 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Department:
+      type: object
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        name_bn:
+          type: string
+        jurisdiction_area:
+          type: string
+        issue_categories:
+          type: array
+          items:
+            type: string
+      required:
+        - id
+        - slug
+        - name
+        - name_bn
+        - jurisdiction_area
+        - issue_categories
+
+    AuthorityUser:
+      type: object
+      properties:
+        id:
+          type: string
+        department_id:
+          type: string
+        username:
+          type: string
+        full_name:
+          type: string
+        role:
+          type: string
+        is_active:
+          type: boolean
+        auth_user_id:
+          type: ["string", "null"]
+        created_at:
+          type: string
+        departments:
+          $ref: "#/components/schemas/Department"
+      required:
+        - id
+        - department_id
+        - username
+        - full_name
+        - role
+        - is_active
+        - created_at
+        - departments
+
+    AuthorityUserResponse:
+      type: object
+      properties:
+        authorityUser:
+          $ref: "#/components/schemas/AuthorityUser"
+      required:
+        - authorityUser
+
+    ReportImage:
+      type: object
+      properties:
+        id:
+          type: string
+        report_id:
+          type: string
+        storage_path:
+          type: string
+        public_url:
+          type: string
+        file_size_bytes:
+          type: ["integer", "null"]
+        mime_type:
+          type: ["string", "null"]
+        upload_order:
+          type: integer
+        created_at:
+          type: string
+      required:
+        - id
+        - report_id
+        - storage_path
+        - public_url
+        - upload_order
+        - created_at
+
+    ReportSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        report_number:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+        urgency_score:
+          type: number
+        address:
+          type: ["string", "null"]
+        ward_name:
+          type: ["string", "null"]
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        ai_verified:
+          type: boolean
+        is_flagged_fake:
+          type: boolean
+        image_count:
+          type: integer
+        thumbnail_url:
+          type: ["string", "null"]
+      required:
+        - id
+        - report_number
+        - category
+        - status
+        - urgency_score
+        - created_at
+        - updated_at
+        - ai_verified
+        - is_flagged_fake
+        - image_count
+
+    AiAnalysis:
+      type: object
+      properties:
+        id:
+          type: string
+        report_id:
+          type: string
+        detected_issue:
+          type: ["string", "null"]
+        severity:
+          type: ["string", "null"]
+        confidence:
+          type: ["number", "null"]
+        is_real_photo:
+          type: ["boolean", "null"]
+        description_en:
+          type: ["string", "null"]
+        description_bn:
+          type: ["string", "null"]
+        is_aggregate:
+          type: boolean
+        final_category:
+          type: ["string", "null"]
+        final_severity:
+          type: ["string", "null"]
+        final_confidence:
+          type: ["number", "null"]
+        final_urgency_score:
+          type: ["number", "null"]
+        aggregate_summary_en:
+          type: ["string", "null"]
+        aggregate_summary_bn:
+          type: ["string", "null"]
+        created_at:
+          type: string
+      required:
+        - id
+        - report_id
+        - is_aggregate
+        - created_at
+
+    ActivityLog:
+      type: object
+      properties:
+        id:
+          type: string
+        report_id:
+          type: ["string", "null"]
+        actor_type:
+          type: ["string", "null"]
+        actor_id:
+          type: ["string", "null"]
+        action:
+          type: string
+        details:
+          type: ["object", "null"]
+        created_at:
+          type: string
+      required:
+        - id
+        - action
+        - created_at
+
+    CitizenInfo:
+      type: object
+      properties:
+        full_name:
+          type: string
+        phone_masked:
+          type: string
+        reputation_score:
+          type: integer
+        total_reports:
+          type: integer
+        verified_reports:
+          type: integer
+      required:
+        - full_name
+        - phone_masked
+        - reputation_score
+        - total_reports
+        - verified_reports
+
+    ReportDetail:
+      type: object
+      properties:
+        id:
+          type: string
+        report_number:
+          type: string
+        category:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        urgency_score:
+          type: number
+        latitude:
+          type: number
+        longitude:
+          type: number
+        address:
+          type: ["string", "null"]
+        ward_name:
+          type: ["string", "null"]
+        area_zone:
+          type: ["string", "null"]
+        ai_verified:
+          type: boolean
+        ai_confidence:
+          type: number
+        is_flagged_fake:
+          type: boolean
+        upvote_count:
+          type: integer
+        confirmation_count:
+          type: integer
+        image_count:
+          type: integer
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        department_id:
+          type: string
+        user_id:
+          type: string
+        departments:
+          type: ["object", "null"]
+        report_images:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportImage"
+        ai_analysis:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiAnalysis"
+        activity_logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityLog"
+        citizen:
+          $ref: "#/components/schemas/CitizenInfo"
+      required:
+        - id
+        - report_number
+        - category
+        - description
+        - status
+        - urgency_score
+        - latitude
+        - longitude
+        - ai_verified
+        - ai_confidence
+        - is_flagged_fake
+        - upvote_count
+        - confirmation_count
+        - image_count
+        - created_at
+        - updated_at
+        - department_id
+        - user_id
+        - report_images
+        - ai_analysis
+        - activity_logs
+        - citizen
+
+    ReportDetailResponse:
+      type: object
+      properties:
+        report:
+          $ref: "#/components/schemas/ReportDetail"
+      required:
+        - report
+
+    ReportsListResponse:
+      type: object
+      properties:
+        reports:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportSummary"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+      required:
+        - reports
+        - total
+        - page
+        - pageSize
+
+    UpdateReportStatusBody:
+      type: object
+      properties:
+        reportId:
+          type: string
+        newStatus:
+          type: string
+        note:
+          type: string
+      required:
+        - reportId
+        - newStatus
+        - note
+
+    UpdateReportStatusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
+        - message
+
+    CategoryCount:
+      type: object
+      properties:
+        category:
+          type: string
+        count:
+          type: integer
+        avg_urgency:
+          type: number
+      required:
+        - category
+        - count
+        - avg_urgency
+
+    DailyCount:
+      type: object
+      properties:
+        date:
+          type: string
+        count:
+          type: integer
+      required:
+        - date
+        - count
+
+    StatusCount:
+      type: object
+      properties:
+        status:
+          type: string
+        count:
+          type: integer
+      required:
+        - status
+        - count
+
+    AnalyticsResponse:
+      type: object
+      properties:
+        categoryBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryCount"
+        dailyReports:
+          type: array
+          items:
+            $ref: "#/components/schemas/DailyCount"
+        statusBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/StatusCount"
+        responseRate:
+          type: number
+        avgResolutionDays:
+          type: ["number", "null"]
+        thisMonthCount:
+          type: integer
+        lastMonthCount:
+          type: integer
+      required:
+        - categoryBreakdown
+        - dailyReports
+        - statusBreakdown
+        - responseRate
+        - thisMonthCount
+        - lastMonthCount
+
+    UrgentReport:
+      type: object
+      properties:
+        id:
+          type: string
+        report_number:
+          type: string
+        category:
+          type: string
+        urgency_score:
+          type: number
+        ward_name:
+          type: ["string", "null"]
+        created_at:
+          type: string
+        status:
+          type: string
+      required:
+        - id
+        - report_number
+        - category
+        - urgency_score
+        - created_at
+        - status
+
+    DashboardSummaryResponse:
+      type: object
+      properties:
+        totalReports:
+          type: integer
+        criticalReports:
+          type: integer
+        underReview:
+          type: integer
+        resolvedThisWeek:
+          type: integer
+        urgentReports:
+          type: array
+          items:
+            $ref: "#/components/schemas/UrgentReport"
+        recentReports:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportSummary"
+        categoryBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryCount"
+      required:
+        - totalReports
+        - criticalReports
+        - underReview
+        - resolvedThisWeek
+        - urgentReports
+        - recentReports
+        - categoryBreakdown

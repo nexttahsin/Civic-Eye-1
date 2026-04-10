@@ -6,4 +6,27 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./activityLog";
+export * from "./activityLogDetails";
+export * from "./aiAnalysis";
+export * from "./analyticsResponse";
+export * from "./authorityUser";
+export * from "./authorityUserResponse";
+export * from "./categoryCount";
+export * from "./citizenInfo";
+export * from "./dailyCount";
+export * from "./dashboardSummaryResponse";
+export * from "./department";
+export * from "./errorResponse";
+export * from "./getAuthorityReportsParams";
 export * from "./healthStatus";
+export * from "./reportDetail";
+export * from "./reportDetailDepartments";
+export * from "./reportDetailResponse";
+export * from "./reportImage";
+export * from "./reportsListResponse";
+export * from "./reportSummary";
+export * from "./statusCount";
+export * from "./updateReportStatusBody";
+export * from "./updateReportStatusResponse";
+export * from "./urgentReport";

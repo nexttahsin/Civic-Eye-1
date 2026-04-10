@@ -1,0 +1,680 @@
+## Authority Dashboard — Full Build Prompt
+*Stack:* Next.js 14 App Router · Supabase · Recharts · Mapbox GL JS
+*Assumes Part 1 database schema and lib/ files are already in place.*
+
+---
+
+## SECTION A — AGENT GROUND RULES
+
+1. *App Router only.* Authority routes live under app/authority/. No Pages Router.
+2. **Every authority query MUST filter by the logged-in user's department_id.** Never fetch all reports — always scope to the department.
+3. **'use client'** is required on every component using hooks, events, or browser APIs.
+4. *Mapbox is client-only.* Always use dynamic(() => import(...), { ssr: false }).
+5. *Do NOT use the adminClient in authority pages or components.* Authority users use the standard Supabase server/client with their own session and RLS policies.
+6. **Status updates must write to both reports and activity_logs** in a single server action or route call.
+7. *Never display raw UUIDs* to authority users. Always show report_number (format: NS-2025-000001).
+8. *Citizen phone numbers must be masked* in the authority view: show 017*****89 pattern.
+9. *Never invent Supabase methods.* Only: supabase.from(), supabase.storage, supabase.auth, supabase.rpc().
+10. **All data mutations (status update, etc.) go through app/api/authority/*/route.ts** — not direct Supabase calls from client components.
+
+---
+
+## SECTION B — AUTHORITY DATABASE SETUP
+
+Run this SQL in Supabase SQL Editor AFTER Part 1 schema is applied:
+
+-- AUTHORITY USERS TABLE
+CREATE TABLE authority_users (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  department_id UUID NOT NULL REFERENCES departments(id),
+  username TEXT UNIQUE NOT NULL,
+  full_name TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('viewer','manager','admin')),
+  is_active BOOLEAN DEFAULT TRUE,
+  auth_user_id UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS FOR AUTHORITY USERS
+ALTER TABLE authority_users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "authority_users_select_own" ON authority_users
+  FOR SELECT USING (auth_user_id = auth.uid());
+
+-- AUTHORITY CAN READ REPORTS FOR THEIR DEPARTMENT
+CREATE POLICY "reports_authority_dept" ON reports
+  FOR SELECT USING (
+    department_id IN (
+      SELECT department_id FROM authority_users WHERE auth_user_id = auth.uid() AND is_active = true
+    )
+  );
+
+-- AUTHORITY CAN UPDATE REPORT STATUS
+CREATE POLICY "reports_authority_update" ON reports
+  FOR UPDATE USING (
+    department_id IN (
+      SELECT department_id FROM authority_users WHERE auth_user_id = auth.uid() AND is_active = true
+    )
+  );
+
+-- AUTHORITY CAN READ IMAGES FOR THEIR REPORTS
+CREATE POLICY "images_authority_dept" ON report_images
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM reports r
+      JOIN authority_users au ON au.department_id = r.department_id
+      WHERE r.id = report_images.report_id AND au.auth_user_id = auth.uid()
+    )
+  );
+
+-- AUTHORITY CAN READ AI ANALYSIS FOR THEIR REPORTS
+CREATE POLICY "ai_analysis_authority" ON ai_analysis
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM reports r
+      JOIN authority_users au ON au.department_id = r.department_id
+      WHERE r.id = ai_analysis.report_id AND au.auth_user_id = auth.uid()
+    )
+  );
+
+-- AUTHORITY CAN READ ACTIVITY LOGS
+CREATE POLICY "activity_logs_authority" ON activity_logs
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM reports r
+      JOIN authority_users au ON au.department_id = r.department_id
+      WHERE r.id = activity_logs.report_id AND au.auth_user_id = auth.uid()
+    )
+  );
+
+-- AUTHORITY CAN INSERT ACTIVITY LOGS (for status changes)
+CREATE POLICY "activity_logs_authority_insert" ON activity_logs
+  FOR INSERT WITH CHECK (actor_type = 'authority');
+
+### Create Demo Authority User
+
+Step 1: In Supabase Dashboard → Authentication → Users → "Add User":
+- Email: dncc_admin@authority.nagarik.seba
+- Password: Demo@2025
+- Copy the generated UUID
+
+Step 2: Run in SQL Editor (replace the UUID):
+INSERT INTO authority_users (department_id, username, full_name, role, auth_user_id)
+SELECT d.id, 'dncc_admin', 'DNCC Admin Officer', 'admin', 'PASTE-UUID-HERE'
+FROM departments d WHERE d.slug = 'dncc';
+
+Repeat for DSCC, WASA if needed for the demo.
+
+---
+
+## SECTION C — FILE STRUCTURE (AUTHORITY MODULE ONLY)
+
+Add these files to the existing Part 1 project:
+
+app/
+└── authority/
+    ├── login/
+    │   └── page.tsx                        ← Authority login form
+    └── (protected)/
+        ├── layout.tsx                      ← Auth guard + department context
+        ├── dashboard/
+        │   └── page.tsx                    ← Summary cards + recent reports
+        ├── reports/
+        │   └── page.tsx                    ← Full paginated report list
+        ├── report/
+        │   └── [id]/
+        │       └── page.tsx                ← Single report detail + management
+        └── analytics/
+            └── page.tsx                    ← Charts and trends
+
+app/api/authority/
+├── update-status/route.ts                  ← POST: change report status
+└── me/route.ts                             ← GET: fetch logged-in authority user info
+
+components/authority/
+├── AuthorityNav.tsx                        ← Sidebar navigation (CLIENT)
+├── ReportTable.tsx                         ← Filterable sortable table (CLIENT)
+├── StatusUpdater.tsx                       ← Status change dropdown (CLIENT)
+├── UrgencyBadge.tsx                        ← Color-coded urgency display
+├── StatusBadge.tsx                         ← Color-coded status pill
+├── ImageGallery.tsx                        ← Click-to-expand image grid (CLIENT)
+├── AiSummaryCard.tsx                       ← AI analysis display
+├── ReportDetailMap.tsx                     ← Non-interactive location map (CLIENT)
+└── AnalyticsCharts.tsx                     ← Recharts bar/line charts (CLIENT)
+
+---
+
+## SECTION D — AUTHORITY CONTEXT & LAYOUT
+
+### app/authority/(protected)/layout.tsx — Server Component
+
+This layout:
+1. Checks for a valid Supabase session. No session → redirect to /authority/login.
+2. Fetches the authority user record from authority_users table to confirm they are a valid authority staff member. Not found → redirect to /authority/login.
+3. Passes the department info down via a Context Provider to all child pages.
+
+// EXACT LOGIC:
+const supabase = createClient()  // server client
+const { data: { session } } = await supabase.auth.getSession()
+if (!session) redirect('/authority/login')
+
+const { data: authorityUser } = await supabase
+  .from('authority_users')
+  .select('*, departments(id, slug, name, name_bn, jurisdiction_area)')
+  .eq('auth_user_id', session.user.id)
+  .eq('is_active', true)
+  .single()
+
+if (!authorityUser) redirect('/authority/login')
+
+// Render: <AuthorityContextProvider value={authorityUser}>{children}</AuthorityContextProvider>
+// The AuthorityNav sidebar receives the authorityUser prop
+
+Create a client-side context:
+// lib/authority-context.tsx — 'use client'
+import { createContext, useContext } from 'react'
+export const AuthorityContext = createContext<AuthorityUser | null>(null)
+export function useAuthority() {
+  const ctx = useContext(AuthorityContext)
+  if (!ctx) throw new Error('useAuthority must be used within AuthorityContextProvider')
+  return ctx
+}
+
+---
+
+## SECTION E — AUTH PAGES
+
+### app/authority/login/page.tsx — Client Component
+
+Fields: Username (text), Password (password)
+
+On submit:
+  const email = `${username}@authority.nagarik.seba`
+  const { error } = await supabase.auth.signInWithPassword({ email, password })
+  if (error) show error: "ব্যবহারকারীর নাম বা পাসওয়ার্ড ভুল।"
+  else router.push('/authority/dashboard')
+
+Design: Centered card on dark bg. Logo at top. Department seal graphic (use a simple SVG badge icon from Lucide: Shield). Different visual treatment from citizen login — more formal, darker, governmental feel.
+
+---
+
+## SECTION F — DASHBOARD PAGE
+
+### app/authority/(protected)/dashboard/page.tsx — Server Component
+
+*Data to fetch* (all filtered by authorityUser.department_id):
+
+// Summary counts
+const { count: totalReports } = await supabase.from('reports').select('*', { count: 'exact', head: true }).eq('department_id', deptId)
+const { count: criticalReports } = await supabase.from('reports').select('*', { count: 'exact', head: true }).eq('department_id', deptId).gte('urgency_score', 7).eq('status', 'submitted')
+const { count: underReview } = await supabase.from('reports').select('*', { count: 'exact', head: true }).eq('department_id', deptId).eq('status', 'under_review')
+
+// Resolved this week
+const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+const { count: resolvedThisWeek } = await supabase.from('reports').select('*', { count: 'exact', head: true }).eq('department_id', deptId).eq('status', 'resolved').gte('updated_at', weekAgo)
+
+// Recent 10 reports
+const { data: recentReports } = await supabase
+  .from('reports')
+  .select('id, report_number, category, status, urgency_score, address, ward_name, created_at, ai_verified, report_images(public_url, upload_order)')
+  .eq('department_id', deptId)
+  .order('urgency_score', { ascending: false })
+  .limit(10)
+
+*Layout:*
+
+Row 1 — 4 summary stat cards:
+[Total Reports: N] [Critical/High: N — red accent] [Under Review: N — amber] [Resolved This Week: N — green]
+
+Row 2 — "Requires Immediate Attention" — reports with urgency_score >= 8, status = 'submitted'. Show as an alert-style list with red left border. Each row: report_number, category icon, urgency badge, ward_name, time ago. Quick "Mark Under Review" button per row.
+
+Row 3 — Recent Reports table (last 10, sorted by urgency desc). Compact version of the full reports table.
+
+Row 4 — Mini bar chart (Recharts): Reports by category for current month. Fetch category count with:
+const { data: categoryCounts } = await supabase.rpc('get_category_counts', { dept_id: deptId, since: monthStart })
+If RPC doesn't exist, fetch all reports for the month and group client-side.
+
+---
+
+## SECTION G — REPORTS LIST PAGE
+
+### app/authority/(protected)/reports/page.tsx — Client Component (needs filters)
+
+*State:*
+const [statusFilter, setStatusFilter] = useState<string>('all')
+const [categoryFilter, setCategoryFilter] = useState<string>('all')
+const [urgencyMin, setUrgencyMin] = useState<number>(1)
+const [sortBy, setSortBy] = useState<'urgency_score' | 'created_at'>('urgency_score')
+const [page, setPage] = useState<number>(0)
+const PAGE_SIZE = 20
+
+*Fetch using SWR:*
+const { data, isLoading } = useSWR(
+  ['authority-reports', deptId, statusFilter, categoryFilter, urgencyMin, sortBy, page],
+  async () => {
+    let query = supabase
+      .from('reports')
+      .select('id, report_number, category, status, urgency_score, address, ward_name, created_at, ai_verified, is_flagged_fake, report_images(public_url, upload_order)', { count: 'exact' })
+      .eq('department_id', deptId)
+      .order(sortBy, { ascending: false })
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+
+    if (statusFilter !== 'all') query = query.eq('status', statusFilter)
+    if (categoryFilter !== 'all') query = query.eq('category', categoryFilter)
+    if (urgencyMin > 1) query = query.gte('urgency_score', urgencyMin)
+
+    const { data, count, error } = await query
+    if (error) throw error
+    return { reports: data, total: count }
+  }
+)
+
+*Table columns:*
+| Report # | Thumbnail | Category | Ward | Urgency | Status | Submitted | Actions |
+|---|---|---|---|---|---|---|---|
+| NS-2025-000042 | 48×48 img | Icon + label | Ward name | Score badge | Status pill | X days ago | View / Update Status |
+
+*Filter bar (above table):*
+- Status dropdown: All / Submitted / Under Review / In Progress / Resolved / Rejected
+- Category dropdown: All + list of categories for this department
+- Urgency minimum: slider 1–10
+- Sort: "By Urgency" / "By Date"
+- Reset filters button
+
+*Pagination:* Prev / Next buttons + "Showing X–Y of Z reports"
+
+*Sortable columns:* Click "Urgency" or "Submitted" header to toggle sort direction.
+
+---
+
+## SECTION H — SINGLE REPORT DETAIL PAGE
+
+### app/authority/(protected)/report/[id]/page.tsx — Server Component
+
+*Fetch all report data:*
+const { data: report } = await supabase
+  .from('reports')
+  .select(`
+    *,
+    departments(name, name_bn, slug),
+    report_images(*, image_metadata(*)),
+    ai_analysis(*),
+    activity_logs(*)
+  `)
+  .eq('id', params.id)
+  .eq('department_id', authorityUser.department_id)  // CRITICAL: scope check
+  .single()
+
+if (!report) notFound()  // Report doesn't belong to this department
+
+Also fetch citizen info (masked):
+const { data: citizen } = await supabase
+  .from('users')
+  .select('full_name, phone, reputation_score, total_reports, verified_reports')
+  .eq('id', report.user_id)
+  .single()
+
+*Page layout — two-column grid:*
+
+LEFT COLUMN (60% width):
+1. Header: report.report_number in mono font + <StatusBadge> + <UrgencyBadge score={report.urgency_score} />
+2. Category icon + label + description
+3. Location: full address, ward name
+4. Timestamps: submitted at, last updated
+5. <ImageGallery images={report.report_images} />
+6. Citizen info: masked name (first + last initial), masked phone (017*****89), reputation score, total reports
+7. Activity timeline: report.activity_logs sorted by created_at, each entry as a timeline item with icon, action label, timestamp
+
+RIGHT COLUMN (40% width):
+1. <StatusUpdater reportId={report.id} currentStatus={report.status} /> — sticky at top
+2. <ReportDetailMap lat={report.latitude} lng={report.longitude} /> — 300px height Mapbox map, non-interactive, pin at report location
+3. <AiSummaryCard analysis={aggregate} /> — show verified badge, confidence bar, severity, summary in both EN and BN
+4. Per-image AI results in an accordion (collapsed by default, expand to see each image's analysis)
+
+---
+
+## SECTION I — STATUS UPDATER COMPONENT & API
+
+### components/authority/StatusUpdater.tsx — Client Component
+
+const STATUSES = [
+  { value: 'under_review', label: 'পর্যালোচনাধীন', labelEn: 'Under Review', color: 'amber' },
+  { value: 'in_progress', label: 'কাজ চলছে', labelEn: 'In Progress', color: 'orange' },
+  { value: 'resolved', label: 'সমাধান হয়েছে', labelEn: 'Resolved', color: 'green' },
+  { value: 'rejected', label: 'প্রত্যাখ্যাত', labelEn: 'Rejected', color: 'red' },
+]
+
+// On status change:
+const res = await fetch('/api/authority/update-status', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ reportId, newStatus, note: '' })
+})
+if (res.ok) {
+  toast.success('স্ট্যাটাস আপডেট হয়েছে')
+  router.refresh()  // Re-fetch server component data
+}
+
+### app/api/authority/update-status/route.ts
+
+// POST handler:
+// 1. Get session → verify user is in authority_users
+// 2. Fetch the authority user's department_id
+// 3. Verify the report's department_id matches → if not, return 403
+// 4. UPDATE reports SET status = newStatus, updated_at = now() WHERE id = reportId
+// 5. INSERT into activity_logs: { report_id, actor_type: 'authority', actor_id: authorityUser.id, action: 'status_updated', details: { from: oldStatus, to: newStatus } }
+// 6. Return { success: true }
+
+---
+
+## SECTION J — ANALYTICS PAGE
+
+### app/authority/(protected)/analytics/page.tsx — Server Component + Client charts
+
+*Fetch data server-side, pass to client chart components:*
+
+// Reports per day (last 30 days)
+// Fetch all reports for dept in last 30 days, group by date in JS
+
+// Reports by category
+// Fetch all reports for dept, group by category in JS
+
+// Reports by status
+// Fetch counts per status using multiple count queries
+
+// Average urgency score over time
+// Fetch last 30 days, calculate weekly averages
+
+*Charts to build (all using Recharts):*
+
+Chart 1 — Bar Chart: "এই মাসে ক্যাটাগরি অনুযায়ী রিপোর্ট" (Reports by Category This Month)
+- X: category names (in Bangla), Y: count
+- Bar color = accent-blue
+- Tooltip: category name + count
+
+Chart 2 — Line Chart: "গত ৩০ দিনে রিপোর্ট প্রবাহ" (Report Flow Last 30 Days)
+- X: dates, Y: report count per day
+- Line color = accent-green
+
+Chart 3 — Donut/Pie Chart: "স্ট্যাটাস বিতরণ" (Status Distribution)
+- Slices per status, colors match status color system
+- Legend below
+
+Chart 4 — Horizontal Bar: "গড় আর্জেন্সি স্কোর" (Average Urgency by Category)
+- Shows which categories in this department average highest urgency
+
+Summary stats above charts:
+Response Rate (resolved / total %): large number display
+Avg Resolution Time: days (from submitted to resolved)
+Reports This Month vs Last Month: with up/down arrow
+
+---
+
+## SECTION K — COMPONENT SPECIFICATIONS
+
+### components/authority/UrgencyBadge.tsx
+
+// Props: score: number
+// Render: a colored pill with score + label
+// Score mapping:
+//   >= 9: red bg, "CRITICAL"
+//   >= 7: orange bg, "HIGH"
+//   >= 5: amber bg, "MEDIUM"
+//   >= 3: blue bg, "LOW"
+//    < 3: gray bg, "MONITORING"
+// Example output: [🔴 9.2 CRITICAL]
+
+### components/authority/StatusBadge.tsx
+
+// Props: status: string
+// Color mapping:
+//   submitted     → blue
+//   under_review  → amber
+//   in_progress   → orange
+//   resolved      → green
+//   rejected      → red
+// Show Bangla label:
+//   submitted → "জমা দেওয়া হয়েছে"
+//   under_review → "পর্যালোচনাধীন"
+//   in_progress → "কাজ চলছে"
+//   resolved → "সমাধান হয়েছে"
+//   rejected → "প্রত্যাখ্যাত"
+
+### components/authority/ImageGallery.tsx — Client Component
+
+// Props: images: ReportImage[]
+// Layout: responsive grid (2 cols mobile, 4 cols desktop)
+// Each image: 160×120px thumbnail, object-cover
+// On click: open full-screen lightbox modal (use @radix-ui/react-dialog)
+// Lightbox: show full image, prev/next navigation, image metadata (EXIF if available, upload_order)
+// Show image metadata below: capture time, GPS match status
+
+### components/authority/AiSummaryCard.tsx
+
+// Props: analysis: AiAnalysis (aggregate row where is_aggregate = true)
+// Show:
+//   - Verification badge: "AI যাচাইকৃত ✓" (green) or "সন্দেহজনক ⚠" (amber)
+//   - Confidence: progress bar 0-100% with percentage label
+//   - Severity: colored chip (minor=gray, moderate=blue, severe=amber, critical=red)
+//   - Summary in English (expandable)
+//   - Summary in Bangla (expandable, uses font-bangla class)
+//   - If verified = false: show reject_reason in red alert box
+
+### components/authority/ReportDetailMap.tsx — Client Component (dynamic import)
+
+// Props: lat: number, lng: number
+// Static non-interactive Mapbox map
+// Show a single red marker at the report location
+// Map height: 280px, no controls, no zoom, no pan (interactive: false)
+// Style: mapbox://styles/mapbox/dark-v11
+// Center: [lng, lat], zoom: 15
+
+### components/authority/AuthorityNav.tsx — Client Component
+
+Sidebar navigation (desktop) / bottom bar (mobile):
+Logo: নাগরিক সেবা [department badge]
+---
+Dashboard (/authority/dashboard)
+All Reports (/authority/reports)
+Analytics (/authority/analytics)
+---
+[Authority user name]
+[Department name in Bangla]
+[Role badge: Admin/Manager/Viewer]
+Logout button
+
+Logout:
+await supabase.auth.signOut()
+router.push('/authority/login')
+
+---
+
+## SECTION L — UI DESIGN TOKENS (AUTHORITY MODULE)
+
+Authority dashboard uses the same CSS variables as Part 1 but with a more data-dense, professional visual treatment.
+
+/* Authority-specific overrides */
+.authority-sidebar {
+  background: #0d1117;  /* Slightly darker than main bg */
+  border-right: 1px solid var(--border);
+  width: 240px;
+}
+
+.stat-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.stat-card.critical { border-left: 3px solid var(--accent-red); }
+.stat-card.warning  { border-left: 3px solid var(--accent-amber); }
+.stat-card.success  { border-left: 3px solid var(--accent-green); }
+
+/* Table rows */
+.report-row { border-bottom: 1px solid var(--border); }
+.report-row:hover { background: var(--bg-tertiary); }
+
+/* Urgency score numbers */
+.urgency-number { font-family: 'Syne', sans-serif; font-weight: 800; }
+
+Typography in authority module:
+- Page titles: Syne, 700 weight
+- Table data: Plus Jakarta Sans, 400/500
+- Report numbers: monospace (use font-mono Tailwind class)
+- Bangla UI labels: Hind Siliguri
+
+---
+
+## SECTION M — ERROR HANDLING & DEBUGGING GUIDE
+
+### M1 — Authority Auth Errors
+
+| Error | Cause | Fix |
+|---|---|---|
+| Redirect loop to /authority/login | Session exists but authority_users record missing | Run the INSERT SQL from Section B Step 2 — the auth user must have a matching row in authority_users |
+| authorityUser is null even after INSERT | auth_user_id UUID mismatch | In Supabase Auth dashboard, copy the exact UUID of the user. The UUID in the INSERT must match exactly. |
+| Can't see any reports after login | RLS policy misconfigured | Run debug query below |
+| "JWT expired" error | Session expired | Call supabase.auth.refreshSession() or redirect to login |
+
+*Debug authority session:*
+// In layout.tsx, temporarily add:
+console.log('Auth session user id:', session?.user.id)
+console.log('Authority user found:', JSON.stringify(authorityUser))
+
+*Debug RLS for authority:*
+-- Check if the authority user's auth_user_id is correct:
+SELECT au.id, au.username, au.department_id, au.auth_user_id, d.slug
+FROM authority_users au
+JOIN departments d ON d.id = au.department_id;
+
+-- Check if the policy is matching:
+-- Temporarily run as the authority user using Supabase's "Row Level Security" test in the dashboard
+-- Or: set role to the authority user's role in SQL editor:
+SET LOCAL role TO 'authenticated';
+SET LOCAL request.jwt.claims TO '{"sub":"AUTHORITY-USER-UUID"}';
+SELECT * FROM reports LIMIT 5;
+
+### M2 — Report Query Errors
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Returns 0 reports even though reports exist | Reports have department_id = null | Reports submitted before the routing fix will have null dept. Run: UPDATE reports SET department_id = (SELECT id FROM departments WHERE slug = 'dncc') WHERE department_id IS NULL |
+| count is null in the count query | Forgot { count: 'exact', head: true } options | Add both options to the .select() call |
+| Reports from other departments appearing | Missing .eq('department_id', deptId) filter | Always add this filter to EVERY query in authority routes |
+| Stale data after status update | Component not re-fetching | Call router.refresh() after a successful mutation (this re-runs server component fetches) |
+
+### M3 — Status Update Errors
+
+| Error | Cause | Fix |
+|---|---|---|
+| 403 from /api/authority/update-status | Report doesn't belong to this department | The route handler must verify report.department_id === authorityUser.department_id before updating |
+| Activity log INSERT fails | Missing RLS policy for authority inserts | Run: CREATE POLICY "activity_logs_authority_insert" ON activity_logs FOR INSERT WITH CHECK (actor_type = 'authority') |
+| Status change doesn't reflect on page | router.refresh() not called | After a successful fetch response, call router.refresh() to re-run server component data fetching |
+
+*Debug status update route:*
+// In update-status/route.ts, add:
+console.log('[Status Update]', { reportId, newStatus, authorityUserId, reportDeptId, authorityDeptId })
+// This will show in your terminal and help trace 403 issues
+
+### M4 — Recharts / Analytics Errors
+
+| Symptom | Fix |
+|---|---|
+| ReferenceError: window is not defined | Add 'use client' to AnalyticsCharts.tsx |
+| Chart renders but data is empty | Log the data prop passed to the chart. Check if the Supabase query returns data in the format Recharts expects: [{ name: 'road_damage', count: 5 }] |
+| Bar chart bars not showing | Check that the dataKey in <Bar> matches the exact key name in your data array |
+| Chart overflows its container | Wrap in <div style={{ width: '100%' }}> and use <ResponsiveContainer width="100%" height={300}> |
+
+### M5 — Mapbox (Report Detail Map) Errors
+
+| Symptom | Fix |
+|---|---|
+| Map blank / grey | mapboxgl.accessToken not set before map init. Set it in useEffect before new mapboxgl.Map() |
+| Cannot read properties of undefined (reading 'accessToken') | mapbox-gl imported in a server context — ensure component has 'use client' and is imported with dynamic(..., { ssr: false }) |
+| Marker at wrong location | Mapbox uses [longitude, latitude] order — opposite of Google Maps. Double-check the order. |
+| Map not filling container | Add height: '100%' to the map container div AND ensure the parent div has an explicit height |
+
+*Debug map initialization:*
+useEffect(() => {
+  console.log('[Map] initializing with', { lat: props.lat, lng: props.lng })
+  console.log('[Map] token:', process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.slice(0, 10))
+  // ...
+}, [])
+
+### M6 — Image Gallery Errors
+
+| Symptom | Fix |
+|---|---|
+| Images return 403 | Supabase Storage bucket must be PUBLIC. Bucket policy must allow public reads. |
+| Lightbox doesn't open | Check @radix-ui/react-dialog is installed. Ensure the Dialog.Root and Dialog.Content are structured correctly |
+| Images load very slowly | Add loading="lazy" to all thumbnail <img> tags below the fold |
+| EXIF metadata all null | Depends on the image. Most modern smartphone photos have EXIF. Screenshots and downloaded images usually don't. This is expected behavior — display "EXIF data not available" gracefully. |
+
+### M7 — Common Next.js Mistakes in This Module
+
+| Mistake | Symptom | Fix |
+|---|---|---|
+| useAuthority() used in server component | Build error | Authority context is client-only. Server components receive authorityUser via props from the layout. |
+| cookies() called in a utility function, not a component | Error: called outside request | Move the createClient() call into the Server Component body, not into a utility |
+| Forget to add notFound() when report not found | Blank page or hydration error | Always add if (!report) notFound() after fetching a single report by ID |
+| Forgetting router.refresh() after mutation | UI shows stale status after update | router.refresh() is the correct way to re-fetch server component data without a full page reload |
+
+### M8 — RLS Quick Debug Script
+
+If you're getting empty data from any table, run this in Supabase SQL editor to test the policy manually:
+
+-- First get your authority user's auth_user_id:
+SELECT auth_user_id, department_id FROM authority_users WHERE username = 'dncc_admin';
+
+-- Then test the report query as that user:
+-- (Replace 'THE-AUTH-UUID' with the actual UUID)
+SELECT r.id, r.report_number, r.status, r.department_id
+FROM reports r
+WHERE r.department_id IN (
+  SELECT department_id FROM authority_users WHERE auth_user_id = 'THE-AUTH-UUID'
+)
+LIMIT 10;
+
+If this returns data in SQL but not in the app, the session is not matching. Check that the auth_user_id in authority_users matches the user's ID in auth.users exactly.
+
+---
+
+## SECTION N — BUILD ORDER
+
+Add the authority module to the Part 1 project in this exact sequence:
+
+1. Run Section B SQL in Supabase SQL Editor
+2. Create the demo authority user (Section B — Create Demo Authority User)
+3. lib/authority-context.tsx
+4. app/api/authority/me/route.ts
+5. app/api/authority/update-status/route.ts
+6. components/authority/UrgencyBadge.tsx
+7. components/authority/StatusBadge.tsx
+8. components/authority/AuthorityNav.tsx
+9. app/authority/login/page.tsx
+10. app/authority/(protected)/layout.tsx
+11. components/authority/ReportDetailMap.tsx (dynamic import of mapbox)
+12. components/authority/ImageGallery.tsx
+13. components/authority/AiSummaryCard.tsx
+14. components/authority/StatusUpdater.tsx
+15. components/authority/ReportTable.tsx
+16. app/authority/(protected)/dashboard/page.tsx
+17. app/authority/(protected)/reports/page.tsx
+18. app/authority/(protected)/report/[id]/page.tsx
+19. components/authority/AnalyticsCharts.tsx
+20. app/authority/(protected)/analytics/page.tsx
+
+---
+
+## SECTION O — PRE-DEMO CHECKLIST
+
+- [ ] Login with dncc_admin / Demo@2025 — reaches dashboard without redirect loop
+- [ ] Dashboard shows correct count of DNCC reports (not reports from other departments)
+- [ ] Change a report status from "submitted" to "in_progress" — status badge updates
+- [ ] Activity log shows the status change entry in report detail page
+- [ ] Reports list filters work: filter by "resolved" shows only resolved reports
+- [ ] Map on report detail page shows a pin at the correct location
+- [ ] AI summary card shows verification status, confidence, and Bangla summary
+- [ ] Analytics charts render with data (at least the category chart)
+- [ ] Login with a DSCC user — should NOT see DNCC reports (RLS test)
+- [ ] /authority/dashboard without login → redirects to /authority/login

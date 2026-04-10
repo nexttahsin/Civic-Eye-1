@@ -5,18 +5,32 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  AnalyticsResponse,
+  AuthorityUserResponse,
+  DashboardSummaryResponse,
+  ErrorResponse,
+  GetAuthorityReportsParams,
+  HealthStatus,
+  ReportDetailResponse,
+  ReportsListResponse,
+  UpdateReportStatusBody,
+  UpdateReportStatusResponse,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -92,6 +106,507 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns the authority user record for the current session
+ * @summary Get logged-in authority user info
+ */
+export const getGetAuthorityMeUrl = () => {
+  return `/api/authority/me`;
+};
+
+export const getAuthorityMe = async (
+  options?: RequestInit,
+): Promise<AuthorityUserResponse> => {
+  return customFetch<AuthorityUserResponse>(getGetAuthorityMeUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAuthorityMeQueryKey = () => {
+  return [`/api/authority/me`] as const;
+};
+
+export const getGetAuthorityMeQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAuthorityMe>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAuthorityMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAuthorityMeQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAuthorityMe>>> = ({
+    signal,
+  }) => getAuthorityMe({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAuthorityMe>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAuthorityMeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAuthorityMe>>
+>;
+export type GetAuthorityMeQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get logged-in authority user info
+ */
+
+export function useGetAuthorityMe<
+  TData = Awaited<ReturnType<typeof getAuthorityMe>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAuthorityMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAuthorityMeQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Update the status of a report and log the activity
+ * @summary Update report status
+ */
+export const getUpdateReportStatusUrl = () => {
+  return `/api/authority/update-status`;
+};
+
+export const updateReportStatus = async (
+  updateReportStatusBody: UpdateReportStatusBody,
+  options?: RequestInit,
+): Promise<UpdateReportStatusResponse> => {
+  return customFetch<UpdateReportStatusResponse>(getUpdateReportStatusUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateReportStatusBody),
+  });
+};
+
+export const getUpdateReportStatusMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateReportStatus>>,
+    TError,
+    { data: BodyType<UpdateReportStatusBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateReportStatus>>,
+  TError,
+  { data: BodyType<UpdateReportStatusBody> },
+  TContext
+> => {
+  const mutationKey = ["updateReportStatus"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateReportStatus>>,
+    { data: BodyType<UpdateReportStatusBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateReportStatus(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateReportStatusMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateReportStatus>>
+>;
+export type UpdateReportStatusMutationBody = BodyType<UpdateReportStatusBody>;
+export type UpdateReportStatusMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update report status
+ */
+export const useUpdateReportStatus = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateReportStatus>>,
+    TError,
+    { data: BodyType<UpdateReportStatusBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateReportStatus>>,
+  TError,
+  { data: BodyType<UpdateReportStatusBody> },
+  TContext
+> => {
+  return useMutation(getUpdateReportStatusMutationOptions(options));
+};
+
+/**
+ * @summary Get reports for the authority's department
+ */
+export const getGetAuthorityReportsUrl = (
+  params?: GetAuthorityReportsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/authority/reports?${stringifiedParams}`
+    : `/api/authority/reports`;
+};
+
+export const getAuthorityReports = async (
+  params?: GetAuthorityReportsParams,
+  options?: RequestInit,
+): Promise<ReportsListResponse> => {
+  return customFetch<ReportsListResponse>(getGetAuthorityReportsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAuthorityReportsQueryKey = (
+  params?: GetAuthorityReportsParams,
+) => {
+  return [`/api/authority/reports`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetAuthorityReportsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAuthorityReports>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params?: GetAuthorityReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAuthorityReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAuthorityReportsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAuthorityReports>>
+  > = ({ signal }) =>
+    getAuthorityReports(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAuthorityReports>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAuthorityReportsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAuthorityReports>>
+>;
+export type GetAuthorityReportsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get reports for the authority's department
+ */
+
+export function useGetAuthorityReports<
+  TData = Awaited<ReturnType<typeof getAuthorityReports>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params?: GetAuthorityReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAuthorityReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAuthorityReportsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns summary stats and recent reports for the authority's department
+ * @summary Get dashboard summary data
+ */
+export const getGetAuthorityDashboardUrl = () => {
+  return `/api/authority/dashboard`;
+};
+
+export const getAuthorityDashboard = async (
+  options?: RequestInit,
+): Promise<DashboardSummaryResponse> => {
+  return customFetch<DashboardSummaryResponse>(getGetAuthorityDashboardUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAuthorityDashboardQueryKey = () => {
+  return [`/api/authority/dashboard`] as const;
+};
+
+export const getGetAuthorityDashboardQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAuthorityDashboard>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAuthorityDashboard>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAuthorityDashboardQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAuthorityDashboard>>
+  > = ({ signal }) => getAuthorityDashboard({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAuthorityDashboard>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAuthorityDashboardQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAuthorityDashboard>>
+>;
+export type GetAuthorityDashboardQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get dashboard summary data
+ */
+
+export function useGetAuthorityDashboard<
+  TData = Awaited<ReturnType<typeof getAuthorityDashboard>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAuthorityDashboard>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAuthorityDashboardQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get analytics data for the authority's department
+ */
+export const getGetAuthorityAnalyticsUrl = () => {
+  return `/api/authority/analytics`;
+};
+
+export const getAuthorityAnalytics = async (
+  options?: RequestInit,
+): Promise<AnalyticsResponse> => {
+  return customFetch<AnalyticsResponse>(getGetAuthorityAnalyticsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAuthorityAnalyticsQueryKey = () => {
+  return [`/api/authority/analytics`] as const;
+};
+
+export const getGetAuthorityAnalyticsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAuthorityAnalytics>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAuthorityAnalytics>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAuthorityAnalyticsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAuthorityAnalytics>>
+  > = ({ signal }) => getAuthorityAnalytics({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAuthorityAnalytics>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAuthorityAnalyticsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAuthorityAnalytics>>
+>;
+export type GetAuthorityAnalyticsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get analytics data for the authority's department
+ */
+
+export function useGetAuthorityAnalytics<
+  TData = Awaited<ReturnType<typeof getAuthorityAnalytics>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAuthorityAnalytics>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAuthorityAnalyticsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get single report detail
+ */
+export const getGetAuthorityReportUrl = (id: string) => {
+  return `/api/authority/reports/${id}`;
+};
+
+export const getAuthorityReport = async (
+  id: string,
+  options?: RequestInit,
+): Promise<ReportDetailResponse> => {
+  return customFetch<ReportDetailResponse>(getGetAuthorityReportUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAuthorityReportQueryKey = (id: string) => {
+  return [`/api/authority/reports/${id}`] as const;
+};
+
+export const getGetAuthorityReportQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAuthorityReport>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAuthorityReport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAuthorityReportQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAuthorityReport>>
+  > = ({ signal }) => getAuthorityReport(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAuthorityReport>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAuthorityReportQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAuthorityReport>>
+>;
+export type GetAuthorityReportQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get single report detail
+ */
+
+export function useGetAuthorityReport<
+  TData = Awaited<ReturnType<typeof getAuthorityReport>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAuthorityReport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAuthorityReportQueryOptions(id, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

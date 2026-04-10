@@ -14,3 +14,237 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Returns the authority user record for the current session
+ * @summary Get logged-in authority user info
+ */
+export const GetAuthorityMeResponse = zod.object({
+  authorityUser: zod.object({
+    id: zod.string(),
+    department_id: zod.string(),
+    username: zod.string(),
+    full_name: zod.string(),
+    role: zod.string(),
+    is_active: zod.boolean(),
+    auth_user_id: zod.string().nullish(),
+    created_at: zod.string(),
+    departments: zod.object({
+      id: zod.string(),
+      slug: zod.string(),
+      name: zod.string(),
+      name_bn: zod.string(),
+      jurisdiction_area: zod.string(),
+      issue_categories: zod.array(zod.string()),
+    }),
+  }),
+});
+
+/**
+ * Update the status of a report and log the activity
+ * @summary Update report status
+ */
+export const UpdateReportStatusBody = zod.object({
+  reportId: zod.string(),
+  newStatus: zod.string(),
+  note: zod.string(),
+});
+
+export const UpdateReportStatusResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string(),
+});
+
+/**
+ * @summary Get reports for the authority's department
+ */
+export const GetAuthorityReportsQueryParams = zod.object({
+  status: zod.coerce.string().nullish(),
+  category: zod.coerce.string().nullish(),
+  urgencyMin: zod.coerce.number().nullish(),
+  sortBy: zod.coerce.string().nullish(),
+  page: zod.coerce.number().nullish(),
+  pageSize: zod.coerce.number().nullish(),
+});
+
+export const GetAuthorityReportsResponse = zod.object({
+  reports: zod.array(
+    zod.object({
+      id: zod.string(),
+      report_number: zod.string(),
+      category: zod.string(),
+      status: zod.string(),
+      urgency_score: zod.number(),
+      address: zod.string().nullish(),
+      ward_name: zod.string().nullish(),
+      created_at: zod.string(),
+      updated_at: zod.string(),
+      ai_verified: zod.boolean(),
+      is_flagged_fake: zod.boolean(),
+      image_count: zod.number(),
+      thumbnail_url: zod.string().nullish(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  pageSize: zod.number(),
+});
+
+/**
+ * Returns summary stats and recent reports for the authority's department
+ * @summary Get dashboard summary data
+ */
+export const GetAuthorityDashboardResponse = zod.object({
+  totalReports: zod.number(),
+  criticalReports: zod.number(),
+  underReview: zod.number(),
+  resolvedThisWeek: zod.number(),
+  urgentReports: zod.array(
+    zod.object({
+      id: zod.string(),
+      report_number: zod.string(),
+      category: zod.string(),
+      urgency_score: zod.number(),
+      ward_name: zod.string().nullish(),
+      created_at: zod.string(),
+      status: zod.string(),
+    }),
+  ),
+  recentReports: zod.array(
+    zod.object({
+      id: zod.string(),
+      report_number: zod.string(),
+      category: zod.string(),
+      status: zod.string(),
+      urgency_score: zod.number(),
+      address: zod.string().nullish(),
+      ward_name: zod.string().nullish(),
+      created_at: zod.string(),
+      updated_at: zod.string(),
+      ai_verified: zod.boolean(),
+      is_flagged_fake: zod.boolean(),
+      image_count: zod.number(),
+      thumbnail_url: zod.string().nullish(),
+    }),
+  ),
+  categoryBreakdown: zod.array(
+    zod.object({
+      category: zod.string(),
+      count: zod.number(),
+      avg_urgency: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Get analytics data for the authority's department
+ */
+export const GetAuthorityAnalyticsResponse = zod.object({
+  categoryBreakdown: zod.array(
+    zod.object({
+      category: zod.string(),
+      count: zod.number(),
+      avg_urgency: zod.number(),
+    }),
+  ),
+  dailyReports: zod.array(
+    zod.object({
+      date: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+  statusBreakdown: zod.array(
+    zod.object({
+      status: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+  responseRate: zod.number(),
+  avgResolutionDays: zod.number().nullish(),
+  thisMonthCount: zod.number(),
+  lastMonthCount: zod.number(),
+});
+
+/**
+ * @summary Get single report detail
+ */
+export const GetAuthorityReportParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetAuthorityReportResponse = zod.object({
+  report: zod.object({
+    id: zod.string(),
+    report_number: zod.string(),
+    category: zod.string(),
+    description: zod.string(),
+    status: zod.string(),
+    urgency_score: zod.number(),
+    latitude: zod.number(),
+    longitude: zod.number(),
+    address: zod.string().nullish(),
+    ward_name: zod.string().nullish(),
+    area_zone: zod.string().nullish(),
+    ai_verified: zod.boolean(),
+    ai_confidence: zod.number(),
+    is_flagged_fake: zod.boolean(),
+    upvote_count: zod.number(),
+    confirmation_count: zod.number(),
+    image_count: zod.number(),
+    created_at: zod.string(),
+    updated_at: zod.string(),
+    department_id: zod.string(),
+    user_id: zod.string(),
+    departments: zod.object({}).passthrough().nullish(),
+    report_images: zod.array(
+      zod.object({
+        id: zod.string(),
+        report_id: zod.string(),
+        storage_path: zod.string(),
+        public_url: zod.string(),
+        file_size_bytes: zod.number().nullish(),
+        mime_type: zod.string().nullish(),
+        upload_order: zod.number(),
+        created_at: zod.string(),
+      }),
+    ),
+    ai_analysis: zod.array(
+      zod.object({
+        id: zod.string(),
+        report_id: zod.string(),
+        detected_issue: zod.string().nullish(),
+        severity: zod.string().nullish(),
+        confidence: zod.number().nullish(),
+        is_real_photo: zod.boolean().nullish(),
+        description_en: zod.string().nullish(),
+        description_bn: zod.string().nullish(),
+        is_aggregate: zod.boolean(),
+        final_category: zod.string().nullish(),
+        final_severity: zod.string().nullish(),
+        final_confidence: zod.number().nullish(),
+        final_urgency_score: zod.number().nullish(),
+        aggregate_summary_en: zod.string().nullish(),
+        aggregate_summary_bn: zod.string().nullish(),
+        created_at: zod.string(),
+      }),
+    ),
+    activity_logs: zod.array(
+      zod.object({
+        id: zod.string(),
+        report_id: zod.string().nullish(),
+        actor_type: zod.string().nullish(),
+        actor_id: zod.string().nullish(),
+        action: zod.string(),
+        details: zod.object({}).passthrough().nullish(),
+        created_at: zod.string(),
+      }),
+    ),
+    citizen: zod.object({
+      full_name: zod.string(),
+      phone_masked: zod.string(),
+      reputation_score: zod.number(),
+      total_reports: zod.number(),
+      verified_reports: zod.number(),
+    }),
+  }),
+});
