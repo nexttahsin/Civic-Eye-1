@@ -38,11 +38,12 @@ export default function Reports() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">All Reports</h1>
-        <p className="text-slate-500">Filter, sort, and manage citizen reports.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">All Reports</h1>
+        <p className="text-muted-foreground">Filter, sort, and manage citizen reports.</p>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 p-4 border rounded-md shadow-sm flex flex-col md:flex-row gap-4 items-center">
+      {/* Filter bar */}
+      <div className="bg-card border border-border rounded-md p-4 flex flex-col md:flex-row gap-4 items-center shadow-sm">
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Status" />
@@ -59,7 +60,7 @@ export default function Reports() {
 
         <div className="flex-1 w-full max-w-sm px-4">
           <div className="flex justify-between mb-1">
-            <span className="text-sm font-medium text-slate-700">Min Urgency: {urgencyMin}</span>
+            <span className="text-sm font-medium text-muted-foreground">Min Urgency: <span className="text-foreground font-bold">{urgencyMin}</span></span>
           </div>
           <Slider 
             value={[urgencyMin]} 
@@ -67,6 +68,7 @@ export default function Reports() {
             max={10} 
             step={1}
             onValueChange={(v) => { setUrgencyMin(v[0]); setPage(1); }}
+            className="[&_[role=slider]]:bg-primary [&_[role=slider]]:border-primary"
           />
         </div>
 
@@ -87,39 +89,40 @@ export default function Reports() {
         </Button>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 border rounded-md shadow-sm overflow-hidden">
+      {/* Table */}
+      <div className="bg-card border border-border rounded-md shadow-sm overflow-hidden">
         <Table>
-          <TableHeader className="bg-slate-50 dark:bg-slate-950">
+          <TableHeader className="bg-muted">
             <TableRow>
-              <TableHead>Report#</TableHead>
-              <TableHead>Location</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Urgency</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Submitted</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="text-muted-foreground">Report#</TableHead>
+              <TableHead className="text-muted-foreground">Location</TableHead>
+              <TableHead className="text-muted-foreground">Category</TableHead>
+              <TableHead className="text-muted-foreground">Urgency</TableHead>
+              <TableHead className="text-muted-foreground">Status</TableHead>
+              <TableHead className="text-muted-foreground">Submitted</TableHead>
+              <TableHead className="text-right text-muted-foreground">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-slate-500">Loading reports...</TableCell>
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Loading reports...</TableCell>
               </TableRow>
             ) : data?.reports.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-slate-500">No reports found matching criteria.</TableCell>
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No reports found matching criteria.</TableCell>
               </TableRow>
             ) : (
               data?.reports.map((report) => (
-                <TableRow key={report.id}>
-                  <TableCell className="font-mono text-sm">{report.report_number}</TableCell>
-                  <TableCell className="max-w-[200px] truncate" title={report.ward_name || report.address || "Unknown"}>
+                <TableRow key={report.id} className="hover:bg-accent/40 transition-colors">
+                  <TableCell className="font-mono text-sm text-primary">{report.report_number}</TableCell>
+                  <TableCell className="max-w-[200px] truncate text-foreground" title={report.ward_name || report.address || "Unknown"}>
                     {report.ward_name || report.address || "Unknown"}
                   </TableCell>
-                  <TableCell>{report.category}</TableCell>
+                  <TableCell className="text-foreground capitalize">{report.category?.replace(/_/g, ' ')}</TableCell>
                   <TableCell><UrgencyBadge score={report.urgency_score} /></TableCell>
                   <TableCell><StatusBadge status={report.status} /></TableCell>
-                  <TableCell className="text-sm text-slate-500">{formatDistanceToNow(new Date(report.created_at), { addSuffix: true })}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{formatDistanceToNow(new Date(report.created_at), { addSuffix: true })}</TableCell>
                   <TableCell className="text-right">
                     <Link href={`/reports/${report.id}`}>
                       <Button variant="secondary" size="sm">View</Button>
@@ -132,23 +135,22 @@ export default function Reports() {
         </Table>
       </div>
 
+      {/* Pagination */}
       {data && data.total > 0 && (
         <div className="flex items-center justify-between">
-          <div className="text-sm text-slate-500">
-            Showing {((page - 1) * PAGE_SIZE) + 1} - {Math.min(page * PAGE_SIZE, data.total)} of {data.total}
+          <div className="text-sm text-muted-foreground">
+            Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, data.total)} of {data.total}
           </div>
           <div className="flex gap-2">
             <Button 
-              variant="outline" 
-              size="sm" 
+              variant="outline" size="sm" 
               disabled={page === 1}
               onClick={() => setPage(p => Math.max(1, p - 1))}
             >
               <ChevronLeft className="w-4 h-4 mr-1" /> Prev
             </Button>
             <Button 
-              variant="outline" 
-              size="sm" 
+              variant="outline" size="sm" 
               disabled={page * PAGE_SIZE >= data.total}
               onClick={() => setPage(p => p + 1)}
             >

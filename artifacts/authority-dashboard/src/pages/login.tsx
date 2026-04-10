@@ -31,63 +31,69 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-900">
-      <Card className="w-[400px] border-slate-700 bg-slate-900 text-slate-100 shadow-xl">
-        <CardHeader className="text-center space-y-4">
-          <div className="mx-auto w-16 h-16 bg-blue-900/50 rounded-full flex items-center justify-center border border-blue-500/30">
-            <Shield className="w-8 h-8 text-blue-400" />
-          </div>
-          <div>
-            <CardTitle className="text-2xl font-bold tracking-tight text-white">নাগরিক সেবা</CardTitle>
-            <CardDescription className="text-slate-400 mt-1">Authority Command Center</CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="username" className="text-slate-300">Username</Label>
-              <Input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus-visible:ring-blue-500"
-                placeholder="Enter your username"
-                data-testid="input-username"
-              />
+    <div className="min-h-screen w-full flex items-center justify-center bg-background">
+      <div className="w-full max-w-md px-4">
+        <Card className="border-border shadow-lg bg-card text-card-foreground">
+          <CardHeader className="text-center space-y-4 pb-4">
+            <div className="mx-auto w-16 h-16 bg-primary/15 rounded-full flex items-center justify-center border-2 border-primary/30">
+              <Shield className="w-8 h-8 text-primary" />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-slate-300">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus-visible:ring-blue-500"
-                placeholder="••••••••"
-                data-testid="input-password"
-              />
+            <div>
+              <CardTitle className="text-2xl font-bold tracking-tight text-foreground">নাগরিক সেবা</CardTitle>
+              <CardDescription className="text-muted-foreground mt-1">Authority Command Center</CardDescription>
             </div>
-            
-            {error && (
-              <div className="text-sm text-red-400 font-medium text-center" data-testid="error-message">
-                {error}
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="username" className="text-foreground font-medium">Username</Label>
+                <Input
+                  id="username"
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  className="bg-background border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
+                  placeholder="Enter your username"
+                  data-testid="input-username"
+                />
               </div>
-            )}
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-foreground font-medium">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="bg-background border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
+                  placeholder="••••••••"
+                  data-testid="input-password"
+                />
+              </div>
+              
+              {error && (
+                <div className="text-sm text-destructive font-medium text-center" data-testid="error-message">
+                  {error}
+                </div>
+              )}
 
-            <Button 
-              type="submit" 
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white border-none"
-              disabled={loading}
-              data-testid="button-login"
-            >
-              {loading ? "Authenticating..." : "Login"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+              <Button 
+                type="submit" 
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+                disabled={loading}
+                data-testid="button-login"
+              >
+                {loading ? "Authenticating..." : "Login"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <p className="text-center text-xs text-muted-foreground mt-4">
+          Dhaka City Corporation · Authority Portal
+        </p>
+      </div>
     </div>
   );
 }

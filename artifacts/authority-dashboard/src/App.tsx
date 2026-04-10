@@ -26,10 +26,10 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   
   if (loading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-slate-900 text-white">
+      <div className="flex h-screen w-full items-center justify-center bg-background text-foreground">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-slate-400 text-sm">লোড হচ্ছে...</span>
+          <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-muted-foreground text-sm">লোড হচ্ছে...</span>
         </div>
       </div>
     );
@@ -40,20 +40,23 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   }
 
   return (
-    <div className="flex h-screen w-full bg-slate-950 overflow-hidden">
-      <div className="w-60 bg-[#0d1117] text-slate-300 flex flex-col border-r border-slate-800 hidden md:flex flex-shrink-0">
-        <div className="px-4 py-5 flex items-center gap-3 border-b border-slate-800">
-          <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white flex-shrink-0">
+    <div className="flex h-screen w-full bg-background overflow-hidden">
+      {/* Sidebar — near-black per palette */}
+      <div className="w-60 bg-sidebar text-sidebar-foreground flex flex-col border-r border-sidebar-border hidden md:flex flex-shrink-0">
+        {/* Brand */}
+        <div className="px-4 py-5 flex items-center gap-3 border-b border-sidebar-border">
+          <div className="w-8 h-8 bg-primary rounded flex items-center justify-center text-primary-foreground flex-shrink-0">
             <Shield size={18} />
           </div>
           <div>
-            <div className="font-bold text-white text-sm tracking-wide">নাগরিক সেবা</div>
-            <div className="text-[10px] text-slate-500 mt-0.5">{user.departments?.name_bn || ''}</div>
+            <div className="font-bold text-sidebar-foreground text-sm tracking-wide">নাগরিক সেবা</div>
+            <div className="text-[10px] text-sidebar-foreground/40 mt-0.5">{user.departments?.name_bn || ''}</div>
           </div>
         </div>
         
+        {/* Nav */}
         <div className="px-3 py-4 flex-1">
-          <div className="text-[10px] font-semibold text-slate-600 mb-3 uppercase tracking-wider px-2">Navigation</div>
+          <div className="text-[10px] font-semibold text-sidebar-foreground/30 mb-3 uppercase tracking-wider px-2">Navigation</div>
           <nav className="space-y-0.5">
             <NavItem href="/dashboard" icon={<LayoutDashboard size={16} />} label="Dashboard" />
             <NavItem href="/reports" icon={<FileText size={16} />} label="All Reports" />
@@ -61,20 +64,22 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
           </nav>
         </div>
 
-        <div className="px-3 py-4 border-t border-slate-800">
+        {/* User footer */}
+        <div className="px-3 py-4 border-t border-sidebar-border">
           <div className="flex flex-col gap-1 mb-3 px-2">
-            <div className="text-sm font-medium text-white">{user.full_name}</div>
-            <div className="text-xs text-slate-500">{user.departments?.name || ''}</div>
+            <div className="text-sm font-medium text-sidebar-foreground">{user.full_name}</div>
+            <div className="text-xs text-sidebar-foreground/40">{user.departments?.name || ''}</div>
             <div className="mt-1">
-              <span className="text-[10px] uppercase bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-slate-700">{user.role}</span>
+              <span className="text-[10px] uppercase bg-sidebar-accent text-sidebar-accent-foreground/60 px-2 py-0.5 rounded border border-sidebar-border">{user.role}</span>
             </div>
           </div>
           <AuthLogoutButton />
         </div>
       </div>
 
+      {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <main className="flex-1 overflow-y-auto bg-slate-950">
+        <main className="flex-1 overflow-y-auto bg-background p-6">
           <Component />
         </main>
       </div>
@@ -91,8 +96,8 @@ function NavItem({ href, icon, label }: { href: string, icon: React.ReactNode, l
       href={href} 
       className={`flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors text-sm ${
         isActive 
-          ? 'bg-blue-600/15 text-blue-400 font-medium' 
-          : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+          ? 'bg-primary/20 text-primary font-semibold' 
+          : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
       }`}
       data-testid={`nav-${label.toLowerCase()}`}
     >
@@ -107,7 +112,7 @@ function AuthLogoutButton() {
   return (
     <button 
       onClick={logout} 
-      className="flex items-center gap-2 text-slate-500 hover:text-slate-200 text-sm transition-colors w-full px-2 py-1.5 rounded hover:bg-slate-800"
+      className="flex items-center gap-2 text-sidebar-foreground/40 hover:text-sidebar-foreground text-sm transition-colors w-full px-2 py-1.5 rounded hover:bg-sidebar-accent"
       data-testid="button-logout"
     >
       <LogOut size={14} />

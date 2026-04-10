@@ -21,8 +21,8 @@ export default function ReportDetail() {
   const [newStatus, setNewStatus] = useState<string>("");
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
 
-  if (isLoading) return <div className="p-8 text-center text-slate-500">Loading report details...</div>;
-  if (!data?.report) return <div className="p-8 text-center text-red-500">Report not found</div>;
+  if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading report details...</div>;
+  if (!data?.report) return <div className="p-8 text-center text-destructive">Report not found</div>;
 
   const report = data.report;
   const citizen = report.citizen;
@@ -52,12 +52,12 @@ export default function ReportDetail() {
             <StatusBadge status={report.status} />
             <UrgencyBadge score={report.urgency_score} />
           </div>
-          <p className="text-slate-500 text-sm">
+          <p className="text-muted-foreground text-sm">
             Submitted {format(new Date(report.created_at), "PPP 'at' p")}
           </p>
         </div>
         
-        <div className="flex items-center gap-2 bg-white dark:bg-slate-900 p-2 rounded-md border shadow-sm">
+        <div className="flex items-center gap-2 bg-card p-2 rounded-md border border-border shadow-sm">
           <Select value={newStatus || report.status} onValueChange={setNewStatus}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Update Status" />
@@ -87,7 +87,7 @@ export default function ReportDetail() {
             </CardHeader>
             <CardContent>
               <div className="text-lg font-medium mb-2">{report.category}</div>
-              <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+              <p className="text-foreground leading-relaxed whitespace-pre-wrap">
                 {report.description || "No description provided."}
               </p>
             </CardContent>
@@ -99,7 +99,7 @@ export default function ReportDetail() {
             </CardHeader>
             <CardContent>
               {report.report_images?.length === 0 ? (
-                <div className="text-slate-500 italic">No images provided.</div>
+                <div className="text-muted-foreground italic">No images provided.</div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                   {report.report_images?.map((img: any) => (
@@ -126,24 +126,23 @@ export default function ReportDetail() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <div className="text-sm font-medium text-slate-500">Address</div>
+                <div className="text-sm font-medium text-muted-foreground">Address</div>
                 <div>{report.address || "N/A"}</div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="text-sm font-medium text-slate-500">Ward</div>
+                  <div className="text-sm font-medium text-muted-foreground">Ward</div>
                   <div>{report.ward_name || "N/A"}</div>
                 </div>
                 <div>
-                  <div className="text-sm font-medium text-slate-500">Coordinates</div>
+                  <div className="text-sm font-medium text-muted-foreground">Coordinates</div>
                   <div className="font-mono text-sm">{report.latitude.toFixed(6)}, {report.longitude.toFixed(6)}</div>
                 </div>
               </div>
               
-              <div className="w-full h-48 bg-slate-100 dark:bg-slate-800 rounded-md border flex items-center justify-center text-slate-500 mt-4">
+              <div className="w-full h-48 bg-muted rounded-md border border-border flex items-center justify-center text-muted-foreground mt-4 text-sm">
                 Map View Placeholder
-                <br />
-                ({report.latitude.toFixed(4)}, {report.longitude.toFixed(4)})
+                &nbsp;({report.latitude.toFixed(4)}, {report.longitude.toFixed(4)})
               </div>
             </CardContent>
           </Card>
@@ -159,34 +158,34 @@ export default function ReportDetail() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
                     {report.ai_verified ? (
-                      <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                      <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-primary/15 text-primary border border-primary/30">
                         AI যাচাইকৃত ✓
                       </span>
                     ) : report.is_flagged_fake ? (
-                      <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800 border border-red-200">
+                      <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-destructive/10 text-destructive border border-destructive/30">
                         সন্দেহজনক ⚠
                       </span>
                     ) : null}
                     
-                    <span className="text-sm text-slate-500">
-                      Confidence: {(aiAnalysis.final_confidence || 0) * 100}%
+                    <span className="text-sm text-muted-foreground">
+                      Confidence: {(aiAnalysis.confidence || 0) * 100}%
                     </span>
                   </div>
                   
                   <div className="text-sm">
-                    <div className="font-medium text-slate-500 mb-1">Summary (Bangla)</div>
-                    <div className="font-['Hind_Siliguri'] text-base leading-relaxed bg-slate-50 dark:bg-slate-900 p-3 rounded border">
-                      {aiAnalysis.aggregate_summary_bn || "No summary available."}
+                    <div className="font-medium text-muted-foreground mb-1">Summary</div>
+                    <div className="font-['Hind_Siliguri'] text-base leading-relaxed bg-secondary/30 p-3 rounded border border-secondary">
+                      {aiAnalysis.summary || "No summary available."}
                     </div>
                   </div>
                   
                   <div className="text-sm">
-                    <div className="font-medium text-slate-500 mb-1">Detected Issue</div>
-                    <div className="capitalize">{aiAnalysis.final_category || "Unknown"} ({aiAnalysis.final_severity || "Unknown"} severity)</div>
+                    <div className="font-medium text-muted-foreground mb-1">Severity</div>
+                    <div className="capitalize text-foreground">{aiAnalysis.severity || "Unknown"}</div>
                   </div>
                 </div>
               ) : (
-                <div className="text-slate-500 italic">AI analysis pending or unavailable.</div>
+                <div className="text-muted-foreground italic">AI analysis pending or unavailable.</div>
               )}
             </CardContent>
           </Card>
@@ -199,24 +198,24 @@ export default function ReportDetail() {
               {citizen ? (
                 <>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Name</span>
-                    <span className="font-medium">{citizen.full_name || "Anonymous"}</span>
+                    <span className="text-muted-foreground">Name</span>
+                    <span className="font-medium text-foreground">{citizen.full_name || "Anonymous"}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Phone</span>
-                    <span className="font-mono">{citizen.phone_masked || "N/A"}</span>
+                    <span className="text-muted-foreground">Phone</span>
+                    <span className="font-mono text-foreground">{citizen.phone_masked || "N/A"}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Reputation Score</span>
-                    <span className="font-medium">{citizen.reputation_score || 0}</span>
+                    <span className="text-muted-foreground">Reputation Score</span>
+                    <span className="font-medium text-foreground">{citizen.reputation_score || 0}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Total Reports</span>
-                    <span className="font-medium">{citizen.total_reports || 0}</span>
+                    <span className="text-muted-foreground">Total Reports</span>
+                    <span className="font-medium text-foreground">{citizen.total_reports || 0}</span>
                   </div>
                 </>
               ) : (
-                <div className="text-slate-500 italic">Reporter details unavailable.</div>
+                <div className="text-muted-foreground italic">Reporter details unavailable.</div>
               )}
             </CardContent>
           </Card>
