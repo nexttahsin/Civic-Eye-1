@@ -49,8 +49,8 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
             <Shield size={18} />
           </div>
           <div>
-            <div className="font-bold text-sidebar-foreground text-sm tracking-wide">নাগরিক সেবা</div>
-            <div className="text-[10px] text-sidebar-foreground/40 mt-0.5">{user.departments?.name_bn || ''}</div>
+            <div className="font-bold text-sidebar-foreground text-sm tracking-wide">Urban Eye</div>
+            <div className="text-[10px] text-sidebar-foreground/40 mt-0.5 font-['Hind_Siliguri']">আরবান আই</div>
           </div>
         </div>
         

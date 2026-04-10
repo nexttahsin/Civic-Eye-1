@@ -39,7 +39,8 @@ export default function Login() {
               <Shield className="w-8 h-8 text-primary" />
             </div>
             <div>
-              <CardTitle className="text-2xl font-bold tracking-tight text-foreground">নাগরিক সেবা</CardTitle>
+              <CardTitle className="text-2xl font-bold tracking-tight text-foreground">Urban Eye</CardTitle>
+              <div className="font-['Hind_Siliguri'] text-lg font-medium text-primary mt-0.5">আরবান আই</div>
               <CardDescription className="text-muted-foreground mt-1">Authority Command Center</CardDescription>
             </div>
           </CardHeader>
